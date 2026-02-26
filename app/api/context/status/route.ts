@@ -1,16 +1,17 @@
 /**
- * GET /api/context/status?handle=<handle>
- *
- * Returns the current state of a creator's digital twin context.
+ * GET  /api/context/status?handle=<handle>  — return creator's twin status
+ * POST /api/context/status                  — initialize creator + Tropicalia project
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { getCreator, upsertCreator } from "@/lib/store";
-import { createBox } from "@/lib/tropicalia";
+import { createProject } from "@/lib/tropicalia";
 
 export async function GET(req: NextRequest) {
   const handle = req.nextUrl.searchParams.get("handle");
-  if (!handle) return NextResponse.json({ error: "handle is required" }, { status: 400 });
+  if (!handle) {
+    return NextResponse.json({ error: "handle is required" }, { status: 400 });
+  }
 
   const normalizedHandle = handle.toLowerCase().replace(/^@/, "");
   const creator = getCreator(normalizedHandle);
@@ -26,38 +27,47 @@ export async function GET(req: NextRequest) {
     });
   }
 
-  return NextResponse.json({
-    ...creator,
-    ready: creator.totalChunks > 0,
-  });
+  return NextResponse.json({ ...creator, ready: creator.totalChunks > 0 });
 }
 
-/**
- * POST /api/context/status
- *
- * Initialize a creator profile (creates their Tropicalia box).
- */
 export async function POST(req: NextRequest) {
-  const body = await req.json();
-  const { handle, displayName } = body as { handle: string; displayName?: string };
+  try {
+    const body = await req.json();
+    const { handle, displayName } = body as {
+      handle: string;
+      displayName?: string;
+    };
 
-  if (!handle) return NextResponse.json({ error: "handle is required" }, { status: 400 });
-  const normalizedHandle = handle.toLowerCase().replace(/^@/, "");
+    if (!handle) {
+      return NextResponse.json({ error: "handle is required" }, { status: 400 });
+    }
 
-  let creator = getCreator(normalizedHandle);
-  if (creator?.boxId) {
-    return NextResponse.json({ ...creator, ready: creator.totalChunks > 0 });
+    const normalizedHandle = handle.toLowerCase().replace(/^@/, "");
+    let creator = getCreator(normalizedHandle);
+
+    // Already initialized — return existing profile
+    if (creator?.boxId) {
+      return NextResponse.json({ ...creator, ready: creator.totalChunks > 0 });
+    }
+
+    // Create Tropicalia project for this twin
+    const projectId = await createProject(normalizedHandle);
+
+    creator = {
+      handle: normalizedHandle,
+      displayName: displayName ?? handle,
+      boxId: projectId,
+      connectedPlatforms: [],
+      totalChunks: 0,
+    };
+    upsertCreator(creator);
+
+    return NextResponse.json({ ...creator, ready: false });
+  } catch (err: any) {
+    console.error("[status/post]", err);
+    return NextResponse.json(
+      { error: err.message ?? "Failed to create twin" },
+      { status: 500 }
+    );
   }
-
-  const boxId = await createBox(normalizedHandle);
-  creator = {
-    handle: normalizedHandle,
-    displayName: displayName ?? handle,
-    boxId,
-    connectedPlatforms: [],
-    totalChunks: 0,
-  };
-  upsertCreator(creator);
-
-  return NextResponse.json({ ...creator, ready: false });
 }

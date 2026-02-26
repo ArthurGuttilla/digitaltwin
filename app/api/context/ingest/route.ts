@@ -1,96 +1,78 @@
 /**
  * POST /api/context/ingest
  *
- * Ingests social content for a creator into their Tropicalia context box.
- * Body: { handle, platform, accessToken?, userId?, content? }
+ * Scrapes a creator's public social profile using Firecrawl (or accepts
+ * manual text), then uploads it as a .txt file to their Tropicalia project.
  *
- * - platform = "twitter" | "youtube" | "instagram" | "manual"
- * - content (string) = raw text for manual ingestion
- * - Creates the Tropicalia box on first ingest.
+ * Body: {
+ *   handle:         string   — creator's handle (identifies the twin)
+ *   platform:       string   — "twitter" | "youtube" | "instagram" | "manual"
+ *   platformHandle: string   — the handle on that specific platform (may differ)
+ *   content?:       string   — raw text, required for platform = "manual"
+ * }
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import {
-  createBox,
-  ingestChunks,
-  clearBox,
-} from "@/lib/tropicalia";
-import {
-  fetchTwitterPosts,
-  fetchYouTubePosts,
-  fetchInstagramPosts,
-  parseManualContent,
-} from "@/lib/social";
+import { createProject, uploadFile } from "@/lib/tropicalia";
+import { crawlSocialProfile, parseManualContent } from "@/lib/social";
 import type { Platform } from "@/lib/store";
 import { getCreator, upsertCreator } from "@/lib/store";
-import type { ContextChunk } from "@/lib/tropicalia";
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { handle, platform, content, reset } = body as {
+    const { handle, platform, platformHandle, content } = body as {
       handle: string;
       platform: Platform;
+      platformHandle?: string;
       content?: string;
-      reset?: boolean;
     };
 
     if (!handle || !platform) {
-      return NextResponse.json({ error: "handle and platform are required" }, { status: 400 });
+      return NextResponse.json(
+        { error: "handle and platform are required" },
+        { status: 400 }
+      );
     }
 
     const normalizedHandle = handle.toLowerCase().replace(/^@/, "");
     let creator = getCreator(normalizedHandle);
 
-    // Create Tropicalia box if this is the first ingest
+    // Auto-create Tropicalia project if not yet initialized
     if (!creator || !creator.boxId) {
-      const boxId = await createBox(normalizedHandle);
+      const projectId = await createProject(normalizedHandle);
       creator = {
         handle: normalizedHandle,
         displayName: handle,
-        boxId,
+        boxId: projectId,
         connectedPlatforms: [],
         totalChunks: 0,
       };
       upsertCreator(creator);
     }
 
-    // Optionally reset the box before re-ingesting
-    if (reset && creator.boxId) {
-      await clearBox(creator.boxId);
-      creator.totalChunks = 0;
-    }
+    // The handle to crawl — may differ from the creator's app handle
+    const targetHandle = (platformHandle || normalizedHandle).replace(/^@/, "");
 
-    let chunks: ContextChunk[] = [];
+    let fileContent: string;
+    let filename: string;
 
-    switch (platform) {
-      case "twitter":
-        chunks = await fetchTwitterPosts(normalizedHandle);
-        break;
-      case "youtube":
-        chunks = await fetchYouTubePosts(normalizedHandle);
-        break;
-      case "instagram": {
-        const igUserId = body.userId as string;
-        if (!igUserId) return NextResponse.json({ error: "userId required for instagram" }, { status: 400 });
-        chunks = await fetchInstagramPosts(igUserId);
-        break;
+    if (platform === "manual") {
+      if (!content?.trim()) {
+        return NextResponse.json(
+          { error: "content is required for manual ingest" },
+          { status: 400 }
+        );
       }
-      case "manual":
-        if (!content) return NextResponse.json({ error: "content required for manual ingest" }, { status: 400 });
-        chunks = parseManualContent(content, "manual");
-        break;
-      default:
-        return NextResponse.json({ error: `Unsupported platform: ${platform}` }, { status: 400 });
+      fileContent = parseManualContent(content);
+      filename = `manual_${normalizedHandle}_${Date.now()}.txt`;
+    } else {
+      fileContent = await crawlSocialProfile(platform, targetHandle);
+      filename = `${platform}_${targetHandle}_${Date.now()}.txt`;
     }
 
-    if (chunks.length === 0) {
-      return NextResponse.json({ error: "No content found to ingest", chunks: 0 }, { status: 200 });
-    }
+    await uploadFile(creator.boxId!, filename, fileContent);
 
-    await ingestChunks(creator.boxId!, chunks);
-
-    // Update creator profile
     const updatedPlatforms = creator.connectedPlatforms.includes(platform)
       ? creator.connectedPlatforms
       : [...creator.connectedPlatforms, platform];
@@ -98,18 +80,21 @@ export async function POST(req: NextRequest) {
     upsertCreator({
       ...creator,
       connectedPlatforms: updatedPlatforms,
-      totalChunks: creator.totalChunks + chunks.length,
+      totalChunks: creator.totalChunks + 1,
       lastIngested: new Date().toISOString(),
     });
 
     return NextResponse.json({
       success: true,
-      boxId: creator.boxId,
-      chunksIngested: chunks.length,
+      projectId: creator.boxId,
+      filesUploaded: 1,
       platform,
     });
   } catch (err: any) {
     console.error("[ingest]", err);
-    return NextResponse.json({ error: err.message ?? "Ingest failed" }, { status: 500 });
+    return NextResponse.json(
+      { error: err.message ?? "Ingest failed" },
+      { status: 500 }
+    );
   }
 }

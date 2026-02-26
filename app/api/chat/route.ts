@@ -1,14 +1,15 @@
 /**
  * POST /api/chat
  *
- * Streaming chat endpoint that uses Tropicalia context to respond as the creator's twin.
+ * Streaming chat endpoint. On each message:
+ *  1. Query Tropicalia for the most relevant context from the creator's project
+ *  2. Build a system prompt that makes Claude respond as the creator's twin
+ *  3. Stream Claude's response back to the client
  *
  * Body: {
- *   handle: string         — creator's handle
- *   messages: { role, content }[]  — conversation history
+ *   handle:   string                              — creator's handle
+ *   messages: { role: "user"|"assistant", content: string }[]
  * }
- *
- * Returns a streaming text/event-stream response.
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -27,28 +28,31 @@ export async function POST(req: NextRequest) {
     };
 
     if (!handle || !messages?.length) {
-      return NextResponse.json({ error: "handle and messages are required" }, { status: 400 });
+      return NextResponse.json(
+        { error: "handle and messages are required" },
+        { status: 400 }
+      );
     }
 
     const normalizedHandle = handle.toLowerCase().replace(/^@/, "");
     const creator = getCreator(normalizedHandle);
 
-    if (!creator || !creator.boxId) {
+    if (!creator?.boxId) {
       return NextResponse.json(
-        { error: `No context found for @${normalizedHandle}. Please ingest social content first.` },
+        { error: `No project found for @${normalizedHandle}. Please sync social content first.` },
         { status: 404 }
       );
     }
 
-    // Get the latest user message to use as the context query
+    // Use the latest user message as the Tropicalia query
     const lastUserMessage = [...messages].reverse().find((m) => m.role === "user");
     const query = lastUserMessage?.content ?? "";
 
-    // Pull relevant context from Tropicalia
-    const contextResult = await queryContext(creator.boxId, query, 8);
-    const systemPrompt = buildSystemPrompt(normalizedHandle, contextResult.chunks);
+    // Pull relevant context chunks from Tropicalia
+    const results = await queryContext(creator.boxId, query, 8);
+    const systemPrompt = buildSystemPrompt(normalizedHandle, results);
 
-    // Stream response from Claude
+    // Stream Claude's response
     const encoder = new TextEncoder();
     const stream = new ReadableStream({
       async start(controller) {
@@ -81,6 +85,9 @@ export async function POST(req: NextRequest) {
     });
   } catch (err: any) {
     console.error("[chat]", err);
-    return NextResponse.json({ error: err.message ?? "Chat failed" }, { status: 500 });
+    return NextResponse.json(
+      { error: err.message ?? "Chat failed" },
+      { status: 500 }
+    );
   }
 }

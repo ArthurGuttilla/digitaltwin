@@ -1,7 +1,16 @@
 "use client";
 
 import { useState } from "react";
-import { Twitter, Youtube, Instagram, FileText, CheckCircle2, Loader2, AlertCircle } from "lucide-react";
+import {
+  Twitter,
+  Youtube,
+  Instagram,
+  FileText,
+  CheckCircle2,
+  Loader2,
+  AlertCircle,
+  Globe,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -16,7 +25,7 @@ interface PlatformConfig {
   label: string;
   icon: React.ReactNode;
   color: string;
-  placeholder: string;
+  profileUrl: (h: string) => string;
   hint: string;
 }
 
@@ -26,32 +35,32 @@ const PLATFORMS: PlatformConfig[] = [
     label: "Twitter / X",
     icon: <Twitter className="w-5 h-5" />,
     color: "from-sky-500/20 to-sky-600/10 border-sky-500/30",
-    placeholder: "username (without @)",
-    hint: "We'll pull your last 100 tweets to learn your writing style",
+    profileUrl: (h) => `x.com/${h}`,
+    hint: "We'll scrape your public X profile and recent posts via Firecrawl",
   },
   {
     id: "youtube",
     label: "YouTube",
     icon: <Youtube className="w-5 h-5" />,
     color: "from-red-500/20 to-red-600/10 border-red-500/30",
-    placeholder: "channel name or handle",
-    hint: "We'll pull titles + descriptions from your recent videos",
+    profileUrl: (h) => `youtube.com/@${h}`,
+    hint: "We'll scrape your public YouTube channel page via Firecrawl",
   },
   {
     id: "instagram",
     label: "Instagram",
     icon: <Instagram className="w-5 h-5" />,
     color: "from-pink-500/20 to-purple-600/10 border-pink-500/30",
-    placeholder: "Instagram user ID (numeric)",
-    hint: "Requires a connected Instagram access token — add it in Settings",
+    profileUrl: (h) => `instagram.com/${h}`,
+    hint: "We'll scrape your public Instagram profile via Firecrawl",
   },
   {
     id: "manual",
     label: "Paste content",
     icon: <FileText className="w-5 h-5" />,
     color: "from-violet-500/20 to-violet-600/10 border-violet-500/30",
-    placeholder: "Paste your posts, captions, newsletters…",
-    hint: "Paste any content in your own voice — emails, posts, scripts, threads",
+    profileUrl: () => "",
+    hint: "Paste any content in your own voice — posts, newsletters, scripts, threads",
   },
 ];
 
@@ -62,25 +71,38 @@ interface SocialConnectProps {
 }
 
 export function SocialConnect({ handle, connectedPlatforms, onIngested }: SocialConnectProps) {
-  const [inputs, setInputs] = useState<Record<Platform, string>>({
-    twitter: "",
-    youtube: "",
-    instagram: "",
+  // Platform handle inputs — pre-filled with the creator's main handle
+  const [platformHandles, setPlatformHandles] = useState<Record<Platform, string>>({
+    twitter: handle,
+    youtube: handle,
+    instagram: handle,
     manual: "",
   });
+
   const [loading, setLoading] = useState<Platform | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [successes, setSuccesses] = useState<Record<string, number>>({});
+  const [successes, setSuccesses] = useState<Record<string, boolean>>({});
 
   async function handleIngest(platform: Platform) {
     setLoading(platform);
     setErrors((e) => ({ ...e, [platform]: "" }));
 
     const body: Record<string, string> = { handle, platform };
+
     if (platform === "manual") {
-      body.content = inputs.manual;
-    } else if (platform === "instagram") {
-      body.userId = inputs.instagram;
+      if (!platformHandles.manual.trim()) {
+        setErrors((e) => ({ ...e, manual: "Please paste some content first" }));
+        setLoading(null);
+        return;
+      }
+      body.content = platformHandles.manual;
+    } else {
+      if (!platformHandles[platform].trim()) {
+        setErrors((e) => ({ ...e, [platform]: "Enter your handle on this platform" }));
+        setLoading(null);
+        return;
+      }
+      body.platformHandle = platformHandles[platform].replace(/^@/, "");
     }
 
     try {
@@ -91,8 +113,8 @@ export function SocialConnect({ handle, connectedPlatforms, onIngested }: Social
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Failed");
-      setSuccesses((s) => ({ ...s, [platform]: data.chunksIngested }));
-      onIngested(platform, data.chunksIngested);
+      setSuccesses((s) => ({ ...s, [platform]: true }));
+      onIngested(platform, 1);
     } catch (err: any) {
       setErrors((e) => ({ ...e, [platform]: err.message }));
     } finally {
@@ -107,6 +129,8 @@ export function SocialConnect({ handle, connectedPlatforms, onIngested }: Social
         const isLoading = loading === p.id;
         const error = errors[p.id];
         const success = successes[p.id];
+        const currentHandle = platformHandles[p.id];
+        const previewUrl = p.id !== "manual" ? p.profileUrl(currentHandle.replace(/^@/, "")) : null;
 
         return (
           <Card key={p.id} className={cn("bg-gradient-to-br", p.color)}>
@@ -116,26 +140,42 @@ export function SocialConnect({ handle, connectedPlatforms, onIngested }: Social
                 {p.label}
                 {isConnected && (
                   <Badge variant="success" className="ml-auto">
-                    <CheckCircle2 className="w-3 h-3 mr-1" /> Connected
+                    <CheckCircle2 className="w-3 h-3 mr-1" /> Synced
                   </Badge>
                 )}
               </CardTitle>
               <CardDescription>{p.hint}</CardDescription>
             </CardHeader>
+
             <CardContent className="space-y-3">
               {p.id === "manual" ? (
                 <Textarea
                   rows={4}
-                  placeholder={p.placeholder}
-                  value={inputs[p.id]}
-                  onChange={(e) => setInputs((i) => ({ ...i, [p.id]: e.target.value }))}
+                  placeholder="Paste your posts, captions, newsletters, scripts…"
+                  value={platformHandles.manual}
+                  onChange={(e) =>
+                    setPlatformHandles((prev) => ({ ...prev, manual: e.target.value }))
+                  }
                 />
               ) : (
-                <Input
-                  placeholder={p.placeholder}
-                  value={inputs[p.id]}
-                  onChange={(e) => setInputs((i) => ({ ...i, [p.id]: e.target.value }))}
-                />
+                <div className="space-y-1.5">
+                  <Input
+                    placeholder={`your ${p.label} handle`}
+                    value={currentHandle}
+                    onChange={(e) =>
+                      setPlatformHandles((prev) => ({
+                        ...prev,
+                        [p.id]: e.target.value.replace(/^@/, ""),
+                      }))
+                    }
+                  />
+                  {previewUrl && currentHandle && (
+                    <p className="flex items-center gap-1 text-xs text-white/30">
+                      <Globe className="w-3 h-3" />
+                      {previewUrl}
+                    </p>
+                  )}
+                </div>
               )}
 
               {error && (
@@ -143,9 +183,9 @@ export function SocialConnect({ handle, connectedPlatforms, onIngested }: Social
                   <AlertCircle className="w-3 h-3" /> {error}
                 </p>
               )}
-              {success !== undefined && (
+              {success && !error && (
                 <p className="text-xs text-emerald-400">
-                  ✓ {success} chunks ingested into Tropicalia
+                  ✓ Profile scraped and uploaded to Tropicalia
                 </p>
               )}
 
@@ -153,17 +193,18 @@ export function SocialConnect({ handle, connectedPlatforms, onIngested }: Social
                 size="sm"
                 variant="secondary"
                 onClick={() => handleIngest(p.id)}
-                disabled={isLoading || (!inputs[p.id] && p.id !== "twitter")}
+                disabled={isLoading}
                 className="w-full"
               >
                 {isLoading ? (
                   <>
-                    <Loader2 className="w-3 h-3 animate-spin" /> Ingesting…
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                    {p.id === "manual" ? "Uploading…" : "Scraping & uploading…"}
                   </>
                 ) : isConnected ? (
                   "Re-sync"
                 ) : (
-                  "Connect & ingest"
+                  "Connect & sync"
                 )}
               </Button>
             </CardContent>
