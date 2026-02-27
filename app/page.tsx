@@ -8,8 +8,8 @@ export default async function Home() {
   const isLoggedIn = !!session?.user;
 
   // Where CTAs point depends on auth state
-  const primaryHref = isLoggedIn ? "/dashboard" : "/login";
-  const createHref  = isLoggedIn ? "/connect"   : "/login";
+  const primaryHref = isLoggedIn ? "/dashboard" : "/signup";
+  const createHref  = isLoggedIn ? "/connect"   : "/signup";
 
   return (
     <div className="min-h-screen bg-[#0a0a0f] text-white">
@@ -30,26 +30,22 @@ export default async function Home() {
 
           {isLoggedIn ? (
             <div className="flex items-center gap-3">
-              {session.user.image ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={session.user.image}
-                  alt={session.user.name ?? ""}
-                  className="w-8 h-8 rounded-full border border-white/20"
-                />
-              ) : (
-                <div className="w-8 h-8 rounded-full bg-violet-600 flex items-center justify-center text-sm font-bold">
-                  {session.user.name?.[0]?.toUpperCase()}
-                </div>
-              )}
+              <div className="w-8 h-8 rounded-full bg-violet-600 flex items-center justify-center text-sm font-bold">
+                {session.user.name?.[0]?.toUpperCase()}
+              </div>
               <Link href="/dashboard">
                 <Button size="sm">Dashboard <ArrowRight className="w-3.5 h-3.5" /></Button>
               </Link>
             </div>
           ) : (
-            <Link href="/login">
-              <Button size="sm">Get started <ArrowRight className="w-3.5 h-3.5" /></Button>
-            </Link>
+            <div className="flex items-center gap-2">
+              <Link href="/login">
+                <Button size="sm" variant="outline">Sign in</Button>
+              </Link>
+              <Link href="/signup">
+                <Button size="sm">Get started <ArrowRight className="w-3.5 h-3.5" /></Button>
+              </Link>
+            </div>
           )}
         </nav>
 
@@ -75,7 +71,7 @@ export default async function Home() {
                 Create your twin <ArrowRight className="w-4 h-4" />
               </Button>
             </Link>
-            <Link href={primaryHref}>
+            <Link href={isLoggedIn ? "/dashboard" : "/login"}>
               <Button size="lg" variant="outline">
                 {isLoggedIn ? "View my twins" : "Sign in"}
               </Button>

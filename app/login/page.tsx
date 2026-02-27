@@ -24,18 +24,26 @@ function LoginForm() {
     setError("");
     setLoading(true);
 
-    const result = await signIn("credentials", {
-      email,
-      password,
-      redirect: false,
-    });
+    try {
+      const result = await signIn("credentials", {
+        email,
+        password,
+        redirect: false,
+      });
 
-    setLoading(false);
-
-    if (result?.error) {
-      setError("Invalid email or password");
-    } else {
-      router.push(callbackUrl);
+      if (result?.error) {
+        setError("Invalid email or password");
+      } else {
+        router.push(callbackUrl);
+      }
+    } catch (err: any) {
+      // NextAuth v5 throws on credential errors instead of returning {error}
+      const isInvalidCreds =
+        err?.type === "CredentialsSignin" ||
+        err?.message?.toLowerCase().includes("credentials");
+      setError(isInvalidCreds ? "Invalid email or password" : "Something went wrong. Please try again.");
+    } finally {
+      setLoading(false);
     }
   }
 
