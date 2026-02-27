@@ -97,13 +97,15 @@ export async function createProject(creatorHandle: string): Promise<string> {
 export async function uploadFile(
   projectId: string,
   filename: string,
-  content: string
+  content: string | Blob
 ): Promise<void> {
   const form = new FormData();
   form.append("project_id", projectId);
   form.append(
     "file",
-    new Blob([content], { type: "text/markdown" }),
+    typeof content === "string"
+      ? new Blob([content], { type: "text/markdown" })
+      : content,
     filename
   );
 

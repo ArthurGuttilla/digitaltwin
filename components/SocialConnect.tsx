@@ -11,6 +11,8 @@ import {
   AlertCircle,
   Link2,
   ExternalLink,
+  Upload,
+  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -98,6 +100,8 @@ export function SocialConnect({ handle, connectedPlatforms, onIngested }: Social
   });
 
   const [manualContent, setManualContent] = useState("");
+  const [manualMode, setManualMode] = useState<"text" | "file">("text");
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [loading, setLoading] = useState<Platform | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [successes, setSuccesses] = useState<Record<string, boolean>>({});
@@ -131,15 +135,32 @@ export function SocialConnect({ handle, connectedPlatforms, onIngested }: Social
     setErrors((e) => ({ ...e, [platform]: "" }));
 
     try {
-      const body: Record<string, string> = { handle, platform };
+      let res: Response;
 
       if (platform === "manual") {
-        if (!manualContent.trim()) {
-          setErrors((e) => ({ ...e, manual: "Please paste some content first" }));
-          setLoading(null);
-          return;
+        if (manualMode === "file") {
+          if (!selectedFile) {
+            setErrors((e) => ({ ...e, manual: "Please select a file first" }));
+            setLoading(null);
+            return;
+          }
+          const fd = new FormData();
+          fd.append("handle", handle);
+          fd.append("platform", platform);
+          fd.append("file", selectedFile);
+          res = await fetch("/api/context/ingest/file", { method: "POST", body: fd });
+        } else {
+          if (!manualContent.trim()) {
+            setErrors((e) => ({ ...e, manual: "Please paste some content first" }));
+            setLoading(null);
+            return;
+          }
+          res = await fetch("/api/context/ingest", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ handle, platform, content: manualContent }),
+          });
         }
-        body.content = manualContent;
       } else {
         const url = states[platform].url.trim();
         if (!url) {
@@ -147,14 +168,12 @@ export function SocialConnect({ handle, connectedPlatforms, onIngested }: Social
           setLoading(null);
           return;
         }
-        body.url = url;
+        res = await fetch("/api/context/ingest", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ handle, platform, url }),
+        });
       }
-
-      const res = await fetch("/api/context/ingest", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
 
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Failed");
@@ -194,12 +213,74 @@ export function SocialConnect({ handle, connectedPlatforms, onIngested }: Social
 
             <CardContent className="space-y-2.5">
               {p.id === "manual" ? (
-                <Textarea
-                  rows={4}
-                  placeholder="Paste your posts, captions, newsletters, scripts…"
-                  value={manualContent}
-                  onChange={(e) => setManualContent(e.target.value)}
-                />
+                <div className="space-y-2">
+                  {/* Mode toggle */}
+                  <div className="flex rounded-lg overflow-hidden border border-white/10 text-xs">
+                    <button
+                      type="button"
+                      onClick={() => setManualMode("text")}
+                      className={cn(
+                        "flex-1 py-1.5 transition-colors",
+                        manualMode === "text"
+                          ? "bg-violet-600 text-white"
+                          : "text-white/50 hover:text-white/80"
+                      )}
+                    >
+                      Paste text
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setManualMode("file")}
+                      className={cn(
+                        "flex-1 py-1.5 transition-colors",
+                        manualMode === "file"
+                          ? "bg-violet-600 text-white"
+                          : "text-white/50 hover:text-white/80"
+                      )}
+                    >
+                      Upload file
+                    </button>
+                  </div>
+
+                  {manualMode === "text" ? (
+                    <Textarea
+                      rows={4}
+                      placeholder="Paste your posts, captions, newsletters, scripts…"
+                      value={manualContent}
+                      onChange={(e) => setManualContent(e.target.value)}
+                    />
+                  ) : (
+                    <label className="flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-white/20 bg-white/5 px-4 py-5 cursor-pointer hover:border-violet-400/50 hover:bg-violet-500/5 transition-colors">
+                      <input
+                        type="file"
+                        accept=".txt,.md,.pdf,.png,.jpg,.jpeg,.csv"
+                        className="hidden"
+                        onChange={(e) => setSelectedFile(e.target.files?.[0] ?? null)}
+                      />
+                      {selectedFile ? (
+                        <div className="flex items-center gap-2 text-sm text-white/80">
+                          <FileText className="w-4 h-4 text-violet-400 shrink-0" />
+                          <span className="truncate max-w-[180px]">{selectedFile.name}</span>
+                          <button
+                            type="button"
+                            onClick={(e) => { e.preventDefault(); setSelectedFile(null); }}
+                            className="shrink-0 text-white/40 hover:text-white/80"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ) : (
+                        <>
+                          <Upload className="w-5 h-5 text-white/30" />
+                          <span className="text-xs text-white/40 text-center">
+                            Click to upload<br />
+                            <span className="text-white/25">PDF · image · CSV · TXT · MD</span>
+                          </span>
+                        </>
+                      )}
+                    </label>
+                  )}
+                </div>
               ) : (
                 <>
                   {/* Handle input — auto-rebuilds the URL */}
