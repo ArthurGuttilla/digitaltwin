@@ -63,7 +63,7 @@ export async function POST(req: NextRequest) {
         );
       }
       fileContent = parseManualContent(content);
-      filename = `manual_${normalizedHandle}_${Date.now()}.txt`;
+      filename = `manual_${normalizedHandle}_${Date.now()}.md`;
     } else {
       if (url?.trim()) {
         fileContent = await crawlUrl(url.trim());
@@ -74,7 +74,7 @@ export async function POST(req: NextRequest) {
       const slug = url
         ? new URL(url).hostname.replace(/\./g, "_")
         : platform;
-      filename = `${slug}_${normalizedHandle}_${Date.now()}.txt`;
+      filename = `${slug}_${normalizedHandle}_${Date.now()}.md`;
     }
 
     await uploadFile(creator.boxId!, filename, fileContent);
