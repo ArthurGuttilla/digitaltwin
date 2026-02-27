@@ -65,8 +65,26 @@ export async function createProject(creatorHandle: string): Promise<string> {
     throw new Error(`Tropicalia createProject failed (HTTP ${res.status}): ${body}`);
   }
 
-  const data = await safeJson<TropicaliaProject>(res);
-  return data.id;
+  const data = await safeJson<Record<string, any>>(res);
+
+  // Log the full response so we can see the actual shape in Vercel logs
+  console.log("[createProject] Tropicalia response:", JSON.stringify(data));
+
+  // Handle common response shapes
+  const id: string | undefined =
+    data.id ??
+    data.project_id ??
+    data.projectId ??
+    data.data?.id ??
+    data.project?.id;
+
+  if (!id) {
+    throw new Error(
+      `Tropicalia createProject: could not find project ID in response: ${JSON.stringify(data)}`
+    );
+  }
+
+  return id;
 }
 
 // ─── File upload ──────────────────────────────────────────────────────────────

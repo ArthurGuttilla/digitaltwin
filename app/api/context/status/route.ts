@@ -45,9 +45,6 @@ export async function POST(req: NextRequest) {
     }
 
     const projectId = await createProject(normalizedHandle);
-    if (!projectId) {
-      return NextResponse.json({ error: "Tropicalia did not return a project ID" }, { status: 500 });
-    }
 
     const creator = {
       handle: normalizedHandle,
