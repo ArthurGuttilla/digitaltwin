@@ -1,59 +1,90 @@
 /**
- * In-memory creator store.
- *
- * Key: `${userId}:${handle}` — ties each twin to the Google user who created it.
- * A secondary index keyed by `handle` lets the public chat page look up twins
- * without knowing the owner's userId.
- *
- * Note: replace with a persistent DB (e.g. Vercel Postgres, Upstash) for production.
+ * Creator profile store — backed by SQLite (data/app.db).
  */
 
+import { randomUUID } from "crypto";
+import db from "./db";
+
+export type Platform = "twitter" | "youtube" | "instagram" | "manual";
+
 export interface CreatorProfile {
-  userId: string;        // Google user ID (session.user.id)
-  handle: string;        // creator's handle / slug
+  userId: string;
+  handle: string;
   displayName: string;
-  email?: string;
-  avatar?: string;
-  boxId: string | null;  // Tropicalia project ID
+  boxId: string | null;
   connectedPlatforms: Platform[];
   totalChunks: number;
   lastIngested?: string;
 }
 
-export type Platform = "twitter" | "youtube" | "instagram" | "manual";
+interface CreatorRow {
+  id: string;
+  user_id: string;
+  handle: string;
+  display_name: string;
+  box_id: string | null;
+  connected_platforms: string;
+  total_chunks: number;
+  last_ingested: string | null;
+}
 
-// Primary store — key: `${userId}:${handle}`
-const store = new Map<string, CreatorProfile>();
-
-// Secondary index — key: handle (for public twin chat lookups)
-const handleIndex = new Map<string, string>(); // handle → primary key
-
-function primaryKey(userId: string, handle: string): string {
-  return `${userId}:${handle.toLowerCase()}`;
+function rowToProfile(row: CreatorRow): CreatorProfile {
+  return {
+    userId: row.user_id,
+    handle: row.handle,
+    displayName: row.display_name,
+    boxId: row.box_id,
+    connectedPlatforms: JSON.parse(row.connected_platforms) as Platform[],
+    totalChunks: row.total_chunks,
+    lastIngested: row.last_ingested ?? undefined,
+  };
 }
 
 export function getCreator(userId: string, handle: string): CreatorProfile | undefined {
-  return store.get(primaryKey(userId, handle));
+  const row = db
+    .prepare("SELECT * FROM creators WHERE user_id = ? AND handle = ?")
+    .get(userId, handle.toLowerCase()) as CreatorRow | undefined;
+  return row ? rowToProfile(row) : undefined;
 }
 
-/** Look up a twin by handle only (used by the public /twin/[handle] chat page). */
+/** Public lookup by handle (used by the /twin/[handle] chat page). */
 export function getCreatorByHandle(handle: string): CreatorProfile | undefined {
-  const key = handleIndex.get(handle.toLowerCase());
-  return key ? store.get(key) : undefined;
+  const row = db
+    .prepare("SELECT * FROM creators WHERE handle = ? ORDER BY created_at DESC LIMIT 1")
+    .get(handle.toLowerCase()) as CreatorRow | undefined;
+  return row ? rowToProfile(row) : undefined;
 }
 
 export function upsertCreator(profile: CreatorProfile): void {
-  const key = primaryKey(profile.userId, profile.handle);
-  store.set(key, profile);
-  handleIndex.set(profile.handle.toLowerCase(), key);
+  db.prepare(`
+    INSERT INTO creators (id, user_id, handle, display_name, box_id, connected_platforms, total_chunks, last_ingested)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(user_id, handle) DO UPDATE SET
+      display_name        = excluded.display_name,
+      box_id              = excluded.box_id,
+      connected_platforms = excluded.connected_platforms,
+      total_chunks        = excluded.total_chunks,
+      last_ingested       = excluded.last_ingested
+  `).run(
+    randomUUID(),
+    profile.userId,
+    profile.handle.toLowerCase(),
+    profile.displayName,
+    profile.boxId,
+    JSON.stringify(profile.connectedPlatforms),
+    profile.totalChunks,
+    profile.lastIngested ?? null
+  );
 }
 
 export function getUserCreators(userId: string): CreatorProfile[] {
-  return Array.from(store.values()).filter((c) => c.userId === userId);
+  const rows = db
+    .prepare("SELECT * FROM creators WHERE user_id = ? ORDER BY created_at DESC")
+    .all(userId) as CreatorRow[];
+  return rows.map(rowToProfile);
 }
 
 export function deleteCreator(userId: string, handle: string): void {
-  const key = primaryKey(userId, handle);
-  store.delete(key);
-  handleIndex.delete(handle.toLowerCase());
+  db.prepare("DELETE FROM creators WHERE user_id = ? AND handle = ?")
+    .run(userId, handle.toLowerCase());
 }

@@ -36,18 +36,9 @@ export default async function DashboardPage() {
           </Link>
 
           <div className="flex items-center gap-3">
-            {session.user.image ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={session.user.image}
-                alt={session.user.name ?? ""}
-                className="w-8 h-8 rounded-full border border-white/20"
-              />
-            ) : (
-              <div className="w-8 h-8 rounded-full bg-violet-600 flex items-center justify-center text-sm font-bold">
-                {session.user.name?.[0]?.toUpperCase()}
-              </div>
-            )}
+            <div className="w-8 h-8 rounded-full bg-violet-600 flex items-center justify-center text-sm font-bold">
+              {session.user.name?.[0]?.toUpperCase()}
+            </div>
             <span className="text-sm text-white/60 hidden sm:block">{session.user.name}</span>
 
             <Link href="/connect">

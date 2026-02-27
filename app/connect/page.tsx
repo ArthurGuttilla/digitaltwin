@@ -24,7 +24,7 @@ function ConnectInner() {
   const [initLoading, setInitLoading] = useState(false);
   const [initError, setInitError] = useState("");
 
-  // Pre-fill displayName from Google session
+  // Pre-fill displayName from session name
   useEffect(() => {
     if (session?.user?.name && !displayName) {
       setDisplayName(session.user.name);
@@ -103,18 +103,9 @@ function ConnectInner() {
           <div className="flex items-center gap-3">
             {session?.user && (
               <>
-                {session.user.image ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={session.user.image}
-                    alt={session.user.name ?? ""}
-                    className="w-8 h-8 rounded-full border border-white/20"
-                  />
-                ) : (
-                  <div className="w-8 h-8 rounded-full bg-violet-600 flex items-center justify-center text-sm font-bold">
-                    {session.user.name?.[0]?.toUpperCase()}
-                  </div>
-                )}
+                <div className="w-8 h-8 rounded-full bg-violet-600 flex items-center justify-center text-sm font-bold">
+                  {session.user.name?.[0]?.toUpperCase()}
+                </div>
                 <span className="text-sm text-white/60 hidden sm:block">{session.user.name}</span>
               </>
             )}

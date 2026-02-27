@@ -59,8 +59,6 @@ export async function POST(req: NextRequest) {
       userId,
       handle: normalizedHandle,
       displayName: displayName ?? handle,
-      email: session.user.email ?? undefined,
-      avatar: session.user.image ?? undefined,
       boxId: projectId,
       connectedPlatforms: [],
       totalChunks: 0,

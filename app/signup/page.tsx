@@ -2,28 +2,53 @@
 
 import { useState } from "react";
 import { signIn } from "next-auth/react";
-import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Bot, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
-function LoginForm() {
+export default function SignupPage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const callbackUrl = searchParams.get("callbackUrl") ?? "/dashboard";
 
-  const [email, setEmail]       = useState("");
-  const [password, setPassword] = useState("");
-  const [error, setError]       = useState("");
-  const [loading, setLoading]   = useState(false);
+  const [name, setName]               = useState("");
+  const [email, setEmail]             = useState("");
+  const [password, setPassword]       = useState("");
+  const [confirm, setConfirm]         = useState("");
+  const [error, setError]             = useState("");
+  const [loading, setLoading]         = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
+
+    if (password !== confirm) {
+      setError("Passwords do not match");
+      return;
+    }
+    if (password.length < 8) {
+      setError("Password must be at least 8 characters");
+      return;
+    }
+
     setLoading(true);
 
+    // 1. Create account
+    const res = await fetch("/api/auth/signup", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, email, password }),
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      setError(data.error ?? "Failed to create account");
+      setLoading(false);
+      return;
+    }
+
+    // 2. Auto sign-in
     const result = await signIn("credentials", {
       email,
       password,
@@ -33,9 +58,10 @@ function LoginForm() {
     setLoading(false);
 
     if (result?.error) {
-      setError("Invalid email or password");
+      setError("Account created — please sign in");
+      router.push("/login");
     } else {
-      router.push(callbackUrl);
+      router.push("/dashboard");
     }
   }
 
@@ -52,12 +78,23 @@ function LoginForm() {
             <Bot className="w-7 h-7 text-violet-400" />
             DigitalTwin
           </Link>
-          <h1 className="text-2xl font-bold">Sign in</h1>
-          <p className="text-white/40 text-sm">Welcome back</p>
+          <h1 className="text-2xl font-bold">Create your account</h1>
+          <p className="text-white/40 text-sm">Start building your digital twin</p>
         </div>
 
         <div className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur-sm p-8 space-y-5">
           <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-1.5">
+              <label className="text-xs text-white/50">Name</label>
+              <Input
+                placeholder="Your name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                required
+                autoComplete="name"
+              />
+            </div>
+
             <div className="space-y-1.5">
               <label className="text-xs text-white/50">Email</label>
               <Input
@@ -74,11 +111,23 @@ function LoginForm() {
               <label className="text-xs text-white/50">Password</label>
               <Input
                 type="password"
-                placeholder="••••••••"
+                placeholder="Min. 8 characters"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
-                autoComplete="current-password"
+                autoComplete="new-password"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs text-white/50">Confirm password</label>
+              <Input
+                type="password"
+                placeholder="Repeat password"
+                value={confirm}
+                onChange={(e) => setConfirm(e.target.value)}
+                required
+                autoComplete="new-password"
               />
             </div>
 
@@ -89,14 +138,14 @@ function LoginForm() {
             )}
 
             <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Sign in"}
+              {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Create account"}
             </Button>
           </form>
 
           <p className="text-center text-sm text-white/40">
-            Don&apos;t have an account?{" "}
-            <Link href="/signup" className="text-violet-400 hover:text-violet-300 transition-colors">
-              Create one
+            Already have an account?{" "}
+            <Link href="/login" className="text-violet-400 hover:text-violet-300 transition-colors">
+              Sign in
             </Link>
           </p>
         </div>
@@ -106,17 +155,5 @@ function LoginForm() {
         </p>
       </div>
     </div>
-  );
-}
-
-export default function LoginPage() {
-  return (
-    <Suspense fallback={
-      <div className="min-h-screen bg-[#0a0a0f] flex items-center justify-center">
-        <Loader2 className="w-6 h-6 animate-spin text-white/40" />
-      </div>
-    }>
-      <LoginForm />
-    </Suspense>
   );
 }
