@@ -29,6 +29,10 @@ export default function Error({
               ? "Database not configured. Check your environment variables."
               : "An unexpected error occurred. Please try again."}
           </p>
+          {/* Show raw message so we can diagnose the root cause */}
+          {error.message && (
+            <p className="text-xs text-red-300/60 font-mono break-all px-2">{error.message}</p>
+          )}
           {error.digest && (
             <p className="text-xs text-white/20 font-mono">ID: {error.digest}</p>
           )}

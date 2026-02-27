@@ -27,11 +27,21 @@ interface CreatorRow {
 }
 
 function rowToProfile(row: CreatorRow): CreatorProfile {
+  // connected_platforms is JSONB but postgres.js may return it as a string
+  // if the driver doesn't recognise the OID — parse defensively.
+  let connectedPlatforms: Platform[] = [];
+  const raw = row.connected_platforms as unknown;
+  if (Array.isArray(raw)) {
+    connectedPlatforms = raw as Platform[];
+  } else if (typeof raw === "string") {
+    try { connectedPlatforms = JSON.parse(raw); } catch { /* leave empty */ }
+  }
+
   return {
     handle: row.handle,
     displayName: row.display_name,
     boxId: row.box_id,
-    connectedPlatforms: row.connected_platforms,
+    connectedPlatforms,
     totalChunks: row.total_chunks,
     lastIngested: row.last_ingested?.toISOString(),
   };
