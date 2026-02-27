@@ -72,6 +72,7 @@ export async function createProject(creatorHandle: string): Promise<string> {
 
   // Handle common response shapes
   const id: string | undefined =
+    data.public_id ??
     data.id ??
     data.project_id ??
     data.projectId ??
