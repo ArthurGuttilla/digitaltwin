@@ -17,6 +17,10 @@ function getClient(): Sql {
     if (!url) throw new Error("DATABASE_URL environment variable is not set");
     client = postgres(url, {
       ssl: url.includes("localhost") || url.includes("127.0.0.1") ? false : "require",
+      // Neon's pooled URL uses PgBouncer in transaction mode, which doesn't
+      // support prepared statements. Setting prepare: false makes postgres.js
+      // send simple queries instead, compatible with all connection modes.
+      prepare: false,
       max: 3,
       idle_timeout: 20,
       connect_timeout: 10,
