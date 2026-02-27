@@ -3,7 +3,7 @@
  *
  * API reference:
  *  POST /v1/projects            → create a project (one per creator twin)
- *  POST /v1/upload/file         → upload a document into a project (multipart)
+ *  POST /v1/projects/:id/upload/file  → upload a document into a project (multipart)
  *  POST /v1/projects/:id/query  → query relevant context from a project
  *
  * Auth: env var TROPICALIA_API (Bearer token, format: tr_...)
@@ -100,14 +100,13 @@ export async function uploadFile(
   content: string
 ): Promise<void> {
   const form = new FormData();
-  form.append("project_id", projectId);
   form.append(
     "file",
     new Blob([content], { type: "text/plain" }),
     filename
   );
 
-  const res = await fetch(`${BASE_URL}/v1/upload/file`, {
+  const res = await fetch(`${BASE_URL}/v1/projects/${projectId}/upload/file`, {
     method: "POST",
     // Do NOT set Content-Type — fetch sets the multipart boundary automatically
     headers: authHeaders(),
