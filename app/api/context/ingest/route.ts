@@ -44,7 +44,7 @@ export async function POST(req: NextRequest) {
 
     const userId = session.user.id;
     const normalizedHandle = handle.toLowerCase().replace(/^@/, "");
-    let creator = getCreator(userId, normalizedHandle);
+    let creator = await getCreator(userId, normalizedHandle);
 
     // Auto-create Tropicalia project on first ingest
     if (!creator?.boxId) {
@@ -57,7 +57,7 @@ export async function POST(req: NextRequest) {
         connectedPlatforms: [],
         totalChunks: 0,
       };
-      upsertCreator(creator);
+      await upsertCreator(creator);
     }
 
     let fileContent: string;
@@ -92,7 +92,7 @@ export async function POST(req: NextRequest) {
       ? creator.connectedPlatforms
       : [...creator.connectedPlatforms, platform];
 
-    upsertCreator({
+    await upsertCreator({
       ...creator,
       connectedPlatforms: updatedPlatforms,
       totalChunks: creator.totalChunks + 1,

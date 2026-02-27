@@ -19,7 +19,7 @@ export default async function DashboardPage() {
   const session = await auth();
   if (!session?.user) redirect("/login");
 
-  const creators: CreatorProfile[] = getUserCreators(session.user.id);
+  const creators: CreatorProfile[] = await getUserCreators(session.user.id);
 
   return (
     <div className="min-h-screen bg-[#0a0a0f] text-white">

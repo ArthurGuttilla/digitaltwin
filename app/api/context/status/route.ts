@@ -15,7 +15,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "handle is required" }, { status: 400 });
   }
 
-  const creator = getCreatorByHandle(handle);
+  const creator = await getCreatorByHandle(handle);
   if (!creator) {
     return NextResponse.json({
       handle: handle.toLowerCase(),
@@ -48,7 +48,7 @@ export async function POST(req: NextRequest) {
     const userId = session.user.id;
     const normalizedHandle = handle.toLowerCase().replace(/^@/, "");
 
-    let creator = getCreator(userId, normalizedHandle);
+    let creator = await getCreator(userId, normalizedHandle);
     if (creator?.boxId) {
       return NextResponse.json({ ...creator, ready: creator.totalChunks > 0 });
     }
@@ -63,7 +63,7 @@ export async function POST(req: NextRequest) {
       connectedPlatforms: [],
       totalChunks: 0,
     };
-    upsertCreator(creator);
+    await upsertCreator(creator);
 
     return NextResponse.json({ ...creator, ready: false });
   } catch (err: any) {

@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
     }
 
     const normalizedHandle = handle.toLowerCase().replace(/^@/, "");
-    const creator = getCreatorByHandle(normalizedHandle);
+    const creator = await getCreatorByHandle(normalizedHandle);
 
     if (!creator?.boxId) {
       return NextResponse.json(

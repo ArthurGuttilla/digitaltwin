@@ -14,6 +14,6 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const creators = getUserCreators(session.user.id);
+  const creators = await getUserCreators(session.user.id);
   return NextResponse.json({ creators });
 }
