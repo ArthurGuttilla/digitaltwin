@@ -1,5 +1,13 @@
-import { auth } from "@/auth";
+/**
+ * Next.js middleware (proxy.ts) — runs in the Edge runtime.
+ * Uses only the Edge-compatible authConfig (no Node.js-only modules).
+ */
+
+import NextAuth from "next-auth";
+import { authConfig } from "./auth.config";
 import { NextResponse } from "next/server";
+
+const { auth } = NextAuth(authConfig);
 
 const PROTECTED = ["/connect", "/dashboard"];
 
@@ -13,8 +21,8 @@ export const proxy = auth((req) => {
     return NextResponse.redirect(loginUrl);
   }
 
-  // Redirect already-logged-in users away from login page
-  if (pathname === "/login" && req.auth) {
+  // Redirect already-logged-in users away from login/signup pages
+  if ((pathname === "/login" || pathname === "/signup") && req.auth) {
     return NextResponse.redirect(new URL("/dashboard", req.nextUrl.origin));
   }
 });

@@ -1,10 +1,16 @@
+/**
+ * Full NextAuth config — Node.js runtime only.
+ * Extends authConfig with the DB-backed authorize() function.
+ * Do NOT import this from middleware.ts (Edge runtime).
+ */
+
 import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import { verifyUser } from "@/lib/users";
+import { authConfig } from "./auth.config";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
-  trustHost: true,
-  session: { strategy: "jwt" },
+  ...authConfig,
   providers: [
     Credentials({
       credentials: {
@@ -19,22 +25,4 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       },
     }),
   ],
-  callbacks: {
-    jwt({ token, user }) {
-      // Persist name + id into the JWT on first sign-in
-      if (user) {
-        token.id   = user.id;
-        token.name = user.name;
-      }
-      return token;
-    },
-    session({ session, token }) {
-      if (token.id)   session.user.id   = token.id   as string;
-      if (token.name) session.user.name = token.name as string;
-      return session;
-    },
-  },
-  pages: {
-    signIn: "/login",
-  },
 });
