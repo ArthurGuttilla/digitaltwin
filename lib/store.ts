@@ -61,15 +61,15 @@ export async function upsertCreator(profile: CreatorProfile): Promise<void> {
     VALUES (
       ${randomUUID()},
       ${profile.handle.toLowerCase()},
-      ${profile.displayName},
-      ${profile.boxId},
-      ${JSON.stringify(profile.connectedPlatforms)},
-      ${profile.totalChunks},
+      ${profile.displayName ?? ""},
+      ${profile.boxId ?? null},
+      ${JSON.stringify(profile.connectedPlatforms ?? [])},
+      ${profile.totalChunks ?? 0},
       ${profile.lastIngested ?? null}
     )
     ON CONFLICT (handle) DO UPDATE SET
-      display_name        = EXCLUDED.display_name,
-      box_id              = EXCLUDED.box_id,
+      display_name        = COALESCE(EXCLUDED.display_name, creators.display_name),
+      box_id              = COALESCE(EXCLUDED.box_id, creators.box_id),
       connected_platforms = EXCLUDED.connected_platforms,
       total_chunks        = EXCLUDED.total_chunks,
       last_ingested       = EXCLUDED.last_ingested

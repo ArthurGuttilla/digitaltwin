@@ -4,7 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { getCreator, upsertCreator } from "@/lib/store";
+import { getCreator, upsertCreator, type Platform } from "@/lib/store";
 import { createProject } from "@/lib/tropicalia";
 
 export async function GET(req: NextRequest) {
@@ -45,12 +45,15 @@ export async function POST(req: NextRequest) {
     }
 
     const projectId = await createProject(normalizedHandle);
+    if (!projectId) {
+      return NextResponse.json({ error: "Tropicalia did not return a project ID" }, { status: 500 });
+    }
 
     const creator = {
       handle: normalizedHandle,
-      displayName: displayName ?? handle,
+      displayName: (displayName || handle).trim(),
       boxId: projectId,
-      connectedPlatforms: [] as [],
+      connectedPlatforms: [] as Platform[],
       totalChunks: 0,
     };
     await upsertCreator(creator);
