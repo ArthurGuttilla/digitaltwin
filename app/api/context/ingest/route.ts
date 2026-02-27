@@ -1,29 +1,30 @@
 /**
  * POST /api/context/ingest
  *
- * Scrapes a creator's public social profile using Firecrawl (or accepts
- * manual text), then uploads it as a .txt file to their Tropicalia project.
+ * Scrapes a URL with Firecrawl (or accepts manual text) then uploads
+ * the resulting text as a .txt file to the creator's Tropicalia project.
  *
- * Body: {
- *   handle:         string   — creator's handle (identifies the twin)
- *   platform:       string   — "twitter" | "youtube" | "instagram" | "manual"
- *   platformHandle: string   — the handle on that specific platform (may differ)
- *   content?:       string   — raw text, required for platform = "manual"
- * }
+ * Body:
+ *   handle:         string  — creator's twin handle
+ *   platform:       string  — "twitter" | "youtube" | "instagram" | "manual"
+ *   url?:           string  — full URL to scrape (preferred for social platforms)
+ *   platformHandle? string  — fallback handle if url is omitted
+ *   content?:       string  — raw text, required when platform = "manual"
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { createProject, uploadFile } from "@/lib/tropicalia";
-import { crawlSocialProfile, parseManualContent } from "@/lib/social";
+import { crawlUrl, crawlSocialProfile, parseManualContent } from "@/lib/social";
 import type { Platform } from "@/lib/store";
 import { getCreator, upsertCreator } from "@/lib/store";
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { handle, platform, platformHandle, content } = body as {
+    const { handle, platform, url, platformHandle, content } = body as {
       handle: string;
       platform: Platform;
+      url?: string;
       platformHandle?: string;
       content?: string;
     };
@@ -38,8 +39,8 @@ export async function POST(req: NextRequest) {
     const normalizedHandle = handle.toLowerCase().replace(/^@/, "");
     let creator = getCreator(normalizedHandle);
 
-    // Auto-create Tropicalia project if not yet initialized
-    if (!creator || !creator.boxId) {
+    // Auto-create Tropicalia project on first ingest
+    if (!creator?.boxId) {
       const projectId = await createProject(normalizedHandle);
       creator = {
         handle: normalizedHandle,
@@ -50,9 +51,6 @@ export async function POST(req: NextRequest) {
       };
       upsertCreator(creator);
     }
-
-    // The handle to crawl — may differ from the creator's app handle
-    const targetHandle = (platformHandle || normalizedHandle).replace(/^@/, "");
 
     let fileContent: string;
     let filename: string;
@@ -67,8 +65,17 @@ export async function POST(req: NextRequest) {
       fileContent = parseManualContent(content);
       filename = `manual_${normalizedHandle}_${Date.now()}.txt`;
     } else {
-      fileContent = await crawlSocialProfile(platform, targetHandle);
-      filename = `${platform}_${targetHandle}_${Date.now()}.txt`;
+      // Use the full URL if the frontend sent one; otherwise build from handle
+      if (url?.trim()) {
+        fileContent = await crawlUrl(url.trim());
+      } else {
+        const targetHandle = (platformHandle || normalizedHandle).replace(/^@/, "");
+        fileContent = await crawlSocialProfile(platform, targetHandle);
+      }
+      const slug = url
+        ? new URL(url).hostname.replace(/\./g, "_")
+        : platform;
+      filename = `${slug}_${normalizedHandle}_${Date.now()}.txt`;
     }
 
     await uploadFile(creator.boxId!, filename, fileContent);
@@ -89,6 +96,7 @@ export async function POST(req: NextRequest) {
       projectId: creator.boxId,
       filesUploaded: 1,
       platform,
+      scrapedUrl: url ?? null,
     });
   } catch (err: any) {
     console.error("[ingest]", err);

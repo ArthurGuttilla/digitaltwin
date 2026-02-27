@@ -9,7 +9,8 @@ import {
   CheckCircle2,
   Loader2,
   AlertCircle,
-  Globe,
+  Link2,
+  ExternalLink,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,7 +26,8 @@ interface PlatformConfig {
   label: string;
   icon: React.ReactNode;
   color: string;
-  profileUrl: (h: string) => string;
+  buildUrl: (handle: string) => string;
+  handlePlaceholder: string;
   hint: string;
 }
 
@@ -35,34 +37,44 @@ const PLATFORMS: PlatformConfig[] = [
     label: "Twitter / X",
     icon: <Twitter className="w-5 h-5" />,
     color: "from-sky-500/20 to-sky-600/10 border-sky-500/30",
-    profileUrl: (h) => `x.com/${h}`,
-    hint: "We'll scrape your public X profile and recent posts via Firecrawl",
+    buildUrl: (h) => `https://x.com/${h}`,
+    handlePlaceholder: "e.g. elonmusk",
+    hint: "Firecrawl will scrape your public X profile for posts and bio",
   },
   {
     id: "youtube",
     label: "YouTube",
     icon: <Youtube className="w-5 h-5" />,
     color: "from-red-500/20 to-red-600/10 border-red-500/30",
-    profileUrl: (h) => `youtube.com/@${h}`,
-    hint: "We'll scrape your public YouTube channel page via Firecrawl",
+    buildUrl: (h) => `https://www.youtube.com/@${h}`,
+    handlePlaceholder: "e.g. mkbhd",
+    hint: "Firecrawl will scrape your YouTube channel page",
   },
   {
     id: "instagram",
     label: "Instagram",
     icon: <Instagram className="w-5 h-5" />,
     color: "from-pink-500/20 to-purple-600/10 border-pink-500/30",
-    profileUrl: (h) => `instagram.com/${h}`,
-    hint: "We'll scrape your public Instagram profile via Firecrawl",
+    buildUrl: (h) => `https://www.instagram.com/${h}/`,
+    handlePlaceholder: "e.g. neymarjr",
+    hint: "Firecrawl will scrape your public Instagram profile",
   },
   {
     id: "manual",
     label: "Paste content",
     icon: <FileText className="w-5 h-5" />,
     color: "from-violet-500/20 to-violet-600/10 border-violet-500/30",
-    profileUrl: () => "",
+    buildUrl: () => "",
+    handlePlaceholder: "",
     hint: "Paste any content in your own voice — posts, newsletters, scripts, threads",
   },
 ];
+
+interface PlatformState {
+  handle: string;
+  url: string;        // editable full URL sent to Firecrawl
+  urlEdited: boolean; // true if user manually edited the URL
+}
 
 interface SocialConnectProps {
   handle: string;
@@ -71,48 +83,82 @@ interface SocialConnectProps {
 }
 
 export function SocialConnect({ handle, connectedPlatforms, onIngested }: SocialConnectProps) {
-  // Platform handle inputs — pre-filled with the creator's main handle
-  const [platformHandles, setPlatformHandles] = useState<Record<Platform, string>>({
-    twitter: handle,
-    youtube: handle,
-    instagram: handle,
-    manual: "",
+  // Per-platform state: handle input + editable Firecrawl URL
+  const [states, setStates] = useState<Record<Platform, PlatformState>>(() => {
+    const initial: Record<string, PlatformState> = {};
+    for (const p of PLATFORMS) {
+      const h = p.id !== "manual" ? handle.replace(/^@/, "") : "";
+      initial[p.id] = {
+        handle: h,
+        url: p.buildUrl(h),
+        urlEdited: false,
+      };
+    }
+    return initial as Record<Platform, PlatformState>;
   });
 
+  const [manualContent, setManualContent] = useState("");
   const [loading, setLoading] = useState<Platform | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [successes, setSuccesses] = useState<Record<string, boolean>>({});
+
+  // When handle changes: rebuild URL only if user hasn't manually edited it
+  function onHandleChange(platform: Platform, raw: string) {
+    const h = raw.replace(/^@/, "");
+    setStates((prev) => {
+      const p = PLATFORMS.find((x) => x.id === platform)!;
+      return {
+        ...prev,
+        [platform]: {
+          handle: h,
+          url: prev[platform].urlEdited ? prev[platform].url : p.buildUrl(h),
+          urlEdited: prev[platform].urlEdited,
+        },
+      };
+    });
+  }
+
+  // When URL is edited directly
+  function onUrlChange(platform: Platform, url: string) {
+    setStates((prev) => ({
+      ...prev,
+      [platform]: { ...prev[platform], url, urlEdited: true },
+    }));
+  }
 
   async function handleIngest(platform: Platform) {
     setLoading(platform);
     setErrors((e) => ({ ...e, [platform]: "" }));
 
-    const body: Record<string, string> = { handle, platform };
-
-    if (platform === "manual") {
-      if (!platformHandles.manual.trim()) {
-        setErrors((e) => ({ ...e, manual: "Please paste some content first" }));
-        setLoading(null);
-        return;
-      }
-      body.content = platformHandles.manual;
-    } else {
-      if (!platformHandles[platform].trim()) {
-        setErrors((e) => ({ ...e, [platform]: "Enter your handle on this platform" }));
-        setLoading(null);
-        return;
-      }
-      body.platformHandle = platformHandles[platform].replace(/^@/, "");
-    }
-
     try {
+      const body: Record<string, string> = { handle, platform };
+
+      if (platform === "manual") {
+        if (!manualContent.trim()) {
+          setErrors((e) => ({ ...e, manual: "Please paste some content first" }));
+          setLoading(null);
+          return;
+        }
+        body.content = manualContent;
+      } else {
+        const url = states[platform].url.trim();
+        if (!url) {
+          setErrors((e) => ({ ...e, [platform]: "Enter a URL to scrape" }));
+          setLoading(null);
+          return;
+        }
+        body.url = url;
+      }
+
       const res = await fetch("/api/context/ingest", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
+
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Failed");
+
       setSuccesses((s) => ({ ...s, [platform]: true }));
       onIngested(platform, 1);
     } catch (err: any) {
@@ -129,8 +175,7 @@ export function SocialConnect({ handle, connectedPlatforms, onIngested }: Social
         const isLoading = loading === p.id;
         const error = errors[p.id];
         const success = successes[p.id];
-        const currentHandle = platformHandles[p.id];
-        const previewUrl = p.id !== "manual" ? p.profileUrl(currentHandle.replace(/^@/, "")) : null;
+        const st = states[p.id];
 
         return (
           <Card key={p.id} className={cn("bg-gradient-to-br", p.color)}>
@@ -147,35 +192,48 @@ export function SocialConnect({ handle, connectedPlatforms, onIngested }: Social
               <CardDescription>{p.hint}</CardDescription>
             </CardHeader>
 
-            <CardContent className="space-y-3">
+            <CardContent className="space-y-2.5">
               {p.id === "manual" ? (
                 <Textarea
                   rows={4}
                   placeholder="Paste your posts, captions, newsletters, scripts…"
-                  value={platformHandles.manual}
-                  onChange={(e) =>
-                    setPlatformHandles((prev) => ({ ...prev, manual: e.target.value }))
-                  }
+                  value={manualContent}
+                  onChange={(e) => setManualContent(e.target.value)}
                 />
               ) : (
-                <div className="space-y-1.5">
+                <>
+                  {/* Handle input — auto-rebuilds the URL */}
                   <Input
-                    placeholder={`your ${p.label} handle`}
-                    value={currentHandle}
-                    onChange={(e) =>
-                      setPlatformHandles((prev) => ({
-                        ...prev,
-                        [p.id]: e.target.value.replace(/^@/, ""),
-                      }))
-                    }
+                    placeholder={p.handlePlaceholder}
+                    value={st.handle}
+                    onChange={(e) => onHandleChange(p.id, e.target.value)}
                   />
-                  {previewUrl && currentHandle && (
-                    <p className="flex items-center gap-1 text-xs text-white/30">
-                      <Globe className="w-3 h-3" />
-                      {previewUrl}
+
+                  {/* Editable URL — the actual link sent to Firecrawl */}
+                  <div className="space-y-1">
+                    <p className="text-[10px] uppercase tracking-wider text-white/30 flex items-center gap-1">
+                      <Link2 className="w-3 h-3" /> URL to scrape with Firecrawl
                     </p>
-                  )}
-                </div>
+                    <div className="flex gap-1.5">
+                      <Input
+                        value={st.url}
+                        onChange={(e) => onUrlChange(p.id, e.target.value)}
+                        className="font-mono text-xs text-white/70"
+                        placeholder="https://…"
+                      />
+                      {st.url && (
+                        <a
+                          href={st.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="shrink-0 flex items-center justify-center w-9 h-9 rounded-lg border border-white/20 hover:bg-white/10 transition-colors"
+                        >
+                          <ExternalLink className="w-3.5 h-3.5 text-white/50" />
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                </>
               )}
 
               {error && (
@@ -185,7 +243,7 @@ export function SocialConnect({ handle, connectedPlatforms, onIngested }: Social
               )}
               {success && !error && (
                 <p className="text-xs text-emerald-400">
-                  ✓ Profile scraped and uploaded to Tropicalia
+                  ✓ Scraped and uploaded to your Tropicalia project
                 </p>
               )}
 
