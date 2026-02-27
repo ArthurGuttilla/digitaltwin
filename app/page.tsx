@@ -1,8 +1,16 @@
 import Link from "next/link";
 import { Bot, Twitter, Youtube, Instagram, Zap, Database, MessageSquare, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { auth } from "@/auth";
 
-export default function Home() {
+export default async function Home() {
+  const session = await auth();
+  const isLoggedIn = !!session?.user;
+
+  // Where CTAs point depends on auth state
+  const primaryHref = isLoggedIn ? "/dashboard" : "/login";
+  const createHref  = isLoggedIn ? "/connect"   : "/login";
+
   return (
     <div className="min-h-screen bg-[#0a0a0f] text-white">
       {/* Gradient blobs */}
@@ -19,9 +27,30 @@ export default function Home() {
             <Bot className="w-6 h-6 text-violet-400" />
             <span>DigitalTwin</span>
           </div>
-          <Link href="/connect">
-            <Button size="sm">Get started <ArrowRight className="w-3.5 h-3.5" /></Button>
-          </Link>
+
+          {isLoggedIn ? (
+            <div className="flex items-center gap-3">
+              {session.user.image ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={session.user.image}
+                  alt={session.user.name ?? ""}
+                  className="w-8 h-8 rounded-full border border-white/20"
+                />
+              ) : (
+                <div className="w-8 h-8 rounded-full bg-violet-600 flex items-center justify-center text-sm font-bold">
+                  {session.user.name?.[0]?.toUpperCase()}
+                </div>
+              )}
+              <Link href="/dashboard">
+                <Button size="sm">Dashboard <ArrowRight className="w-3.5 h-3.5" /></Button>
+              </Link>
+            </div>
+          ) : (
+            <Link href="/login">
+              <Button size="sm">Get started <ArrowRight className="w-3.5 h-3.5" /></Button>
+            </Link>
+          )}
         </nav>
 
         {/* Hero */}
@@ -41,13 +70,15 @@ export default function Home() {
           </p>
 
           <div className="flex flex-wrap gap-3 justify-center">
-            <Link href="/connect">
+            <Link href={createHref}>
               <Button size="lg">
                 Create your twin <ArrowRight className="w-4 h-4" />
               </Button>
             </Link>
-            <Link href="/dashboard">
-              <Button size="lg" variant="outline">View demo</Button>
+            <Link href={primaryHref}>
+              <Button size="lg" variant="outline">
+                {isLoggedIn ? "View my twins" : "Sign in"}
+              </Button>
             </Link>
           </div>
         </section>
@@ -109,7 +140,7 @@ export default function Home() {
                 <span className="text-xs text-white/40">Manual</span>
               </div>
             </div>
-            <Link href="/connect">
+            <Link href={createHref}>
               <Button>Start now <ArrowRight className="w-4 h-4" /></Button>
             </Link>
           </div>
