@@ -1,24 +1,24 @@
 /**
- * GET  /api/context/status?handle=<handle>  — return creator's twin status
- * POST /api/context/status                  — initialize creator + Tropicalia project
+ * GET  /api/context/status?handle=<handle>  — public: return twin status for the chat page
+ * POST /api/context/status                  — protected: initialize a twin for the logged-in user
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { getCreator, upsertCreator } from "@/lib/store";
+import { auth } from "@/auth";
+import { getCreatorByHandle, getCreator, upsertCreator } from "@/lib/store";
 import { createProject } from "@/lib/tropicalia";
 
+// Public — used by the /twin/[handle] chat page
 export async function GET(req: NextRequest) {
   const handle = req.nextUrl.searchParams.get("handle");
   if (!handle) {
     return NextResponse.json({ error: "handle is required" }, { status: 400 });
   }
 
-  const normalizedHandle = handle.toLowerCase().replace(/^@/, "");
-  const creator = getCreator(normalizedHandle);
-
+  const creator = getCreatorByHandle(handle);
   if (!creator) {
     return NextResponse.json({
-      handle: normalizedHandle,
+      handle: handle.toLowerCase(),
       boxId: null,
       connectedPlatforms: [],
       totalChunks: 0,
@@ -30,32 +30,37 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({ ...creator, ready: creator.totalChunks > 0 });
 }
 
+// Protected — creates a Tropicalia project for the signed-in creator
 export async function POST(req: NextRequest) {
+  const session = await auth();
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   try {
     const body = await req.json();
-    const { handle, displayName } = body as {
-      handle: string;
-      displayName?: string;
-    };
+    const { handle, displayName } = body as { handle: string; displayName?: string };
 
     if (!handle) {
       return NextResponse.json({ error: "handle is required" }, { status: 400 });
     }
 
+    const userId = session.user.id;
     const normalizedHandle = handle.toLowerCase().replace(/^@/, "");
-    let creator = getCreator(normalizedHandle);
 
-    // Already initialized — return existing profile
+    let creator = getCreator(userId, normalizedHandle);
     if (creator?.boxId) {
       return NextResponse.json({ ...creator, ready: creator.totalChunks > 0 });
     }
 
-    // Create Tropicalia project for this twin
     const projectId = await createProject(normalizedHandle);
 
     creator = {
+      userId,
       handle: normalizedHandle,
       displayName: displayName ?? handle,
+      email: session.user.email ?? undefined,
+      avatar: session.user.image ?? undefined,
       boxId: projectId,
       connectedPlatforms: [],
       totalChunks: 0,

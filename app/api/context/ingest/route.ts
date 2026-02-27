@@ -13,12 +13,18 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@/auth";
 import { createProject, uploadFile } from "@/lib/tropicalia";
 import { crawlUrl, crawlSocialProfile, parseManualContent } from "@/lib/social";
 import type { Platform } from "@/lib/store";
 import { getCreator, upsertCreator } from "@/lib/store";
 
 export async function POST(req: NextRequest) {
+  const session = await auth();
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   try {
     const body = await req.json();
     const { handle, platform, url, platformHandle, content } = body as {
@@ -36,15 +42,19 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const userId = session.user.id;
     const normalizedHandle = handle.toLowerCase().replace(/^@/, "");
-    let creator = getCreator(normalizedHandle);
+    let creator = getCreator(userId, normalizedHandle);
 
     // Auto-create Tropicalia project on first ingest
     if (!creator?.boxId) {
       const projectId = await createProject(normalizedHandle);
       creator = {
+        userId,
         handle: normalizedHandle,
         displayName: handle,
+        email: session.user.email ?? undefined,
+        avatar: session.user.image ?? undefined,
         boxId: projectId,
         connectedPlatforms: [],
         totalChunks: 0,
