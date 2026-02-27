@@ -15,7 +15,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { queryContext, buildSystemPrompt } from "@/lib/tropicalia";
-import { getCreatorByHandle } from "@/lib/store";
+import { getCreator } from "@/lib/store";
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
     }
 
     const normalizedHandle = handle.toLowerCase().replace(/^@/, "");
-    const creator = await getCreatorByHandle(normalizedHandle);
+    const creator = await getCreator(normalizedHandle);
 
     if (!creator?.boxId) {
       return NextResponse.json(

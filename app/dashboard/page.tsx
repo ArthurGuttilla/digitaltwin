@@ -1,8 +1,8 @@
+export const dynamic = "force-dynamic";
+
 import Link from "next/link";
-import { redirect } from "next/navigation";
-import { Plus, MessageSquare, Database, Twitter, Youtube, Instagram, FileText, LogOut, Bot } from "lucide-react";
-import { auth, signOut } from "@/auth";
-import { getUserCreators } from "@/lib/store";
+import { Plus, MessageSquare, Database, Twitter, Youtube, Instagram, FileText, Bot } from "lucide-react";
+import { getAllCreators } from "@/lib/store";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,10 +16,7 @@ const PLATFORM_ICONS: Record<string, React.ReactNode> = {
 };
 
 export default async function DashboardPage() {
-  const session = await auth();
-  if (!session?.user) redirect("/login");
-
-  const creators: CreatorProfile[] = await getUserCreators(session.user.id);
+  const creators: CreatorProfile[] = await getAllCreators();
 
   return (
     <div className="min-h-screen bg-[#0a0a0f] text-white">
@@ -34,44 +31,22 @@ export default async function DashboardPage() {
             <Bot className="w-6 h-6 text-violet-400" />
             DigitalTwin
           </Link>
-
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-full bg-violet-600 flex items-center justify-center text-sm font-bold">
-              {session.user.name?.[0]?.toUpperCase()}
-            </div>
-            <span className="text-sm text-white/60 hidden sm:block">{session.user.name}</span>
-
-            <Link href="/connect">
-              <Button size="sm">
-                <Plus className="w-4 h-4" /> New twin
-              </Button>
-            </Link>
-
-            <form
-              action={async () => {
-                "use server";
-                await signOut({ redirectTo: "/" });
-              }}
-            >
-              <button
-                type="submit"
-                className="flex items-center gap-1.5 text-xs text-white/40 hover:text-white/70 transition-colors"
-              >
-                <LogOut className="w-3.5 h-3.5" /> Sign out
-              </button>
-            </form>
-          </div>
+          <Link href="/connect">
+            <Button size="sm">
+              <Plus className="w-4 h-4" /> New twin
+            </Button>
+          </Link>
         </div>
 
-        <h1 className="text-3xl font-bold mb-2">Your digital twins</h1>
-        <p className="text-white/40 mb-10">Manage and chat with the AI clones of your online presence</p>
+        <h1 className="text-3xl font-bold mb-2">Digital twins</h1>
+        <p className="text-white/40 mb-10">Chat with AI clones built from real social content</p>
 
         {creators.length === 0 ? (
           <div className="text-center py-24 space-y-4">
             <Bot className="w-16 h-16 text-white/10 mx-auto" />
             <p className="text-white/40">No twins yet</p>
             <Link href="/connect">
-              <Button>Create your first twin</Button>
+              <Button>Create the first twin</Button>
             </Link>
           </div>
         ) : (
@@ -119,10 +94,12 @@ export default async function DashboardPage() {
                     </div>
                   )}
 
-                  <div className="flex items-center gap-2 text-xs text-white/30">
-                    <Database className="w-3 h-3" />
-                    <span className="font-mono truncate">{c.boxId?.slice(0, 24)}…</span>
-                  </div>
+                  {c.boxId && (
+                    <div className="flex items-center gap-2 text-xs text-white/30">
+                      <Database className="w-3 h-3" />
+                      <span className="font-mono truncate">{c.boxId.slice(0, 24)}…</span>
+                    </div>
+                  )}
 
                   <div className="flex gap-2 pt-1">
                     <Link href={`/twin/${c.handle}`} className="flex-1">

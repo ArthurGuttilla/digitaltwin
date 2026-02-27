@@ -2,8 +2,7 @@
 
 import { Suspense, useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useSession, signOut } from "next-auth/react";
-import { Bot, ArrowRight, Loader2, LogOut } from "lucide-react";
+import { Bot, ArrowRight, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,20 +15,12 @@ type Platform = "twitter" | "youtube" | "instagram" | "manual";
 function ConnectInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { data: session, status } = useSession();
 
   const [handle, setHandle] = useState(searchParams.get("handle") ?? "");
   const [displayName, setDisplayName] = useState("");
   const [creator, setCreator] = useState<CreatorProfile | null>(null);
   const [initLoading, setInitLoading] = useState(false);
   const [initError, setInitError] = useState("");
-
-  // Pre-fill displayName from session name
-  useEffect(() => {
-    if (session?.user?.name && !displayName) {
-      setDisplayName(session.user.name);
-    }
-  }, [session, displayName]);
 
   // If a handle was passed via query string, auto-load it
   useEffect(() => {
@@ -42,14 +33,6 @@ function ConnectInner() {
     }
   }, [searchParams]);
 
-  if (status === "loading") {
-    return (
-      <div className="min-h-screen bg-[#0a0a0f] flex items-center justify-center text-white/40">
-        <Loader2 className="w-6 h-6 animate-spin" />
-      </div>
-    );
-  }
-
   async function initCreator() {
     if (!handle.trim()) return;
     setInitLoading(true);
@@ -58,7 +41,7 @@ function ConnectInner() {
       const res = await fetch("/api/context/status", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ handle: handle.trim(), displayName: displayName || handle }),
+        body: JSON.stringify({ handle: handle.trim(), displayName: displayName || handle.trim() }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Failed to initialize");
@@ -99,33 +82,15 @@ function ConnectInner() {
             <Bot className="w-6 h-6 text-violet-400" />
             DigitalTwin
           </Link>
-
-          <div className="flex items-center gap-3">
-            {session?.user && (
-              <>
-                <div className="w-8 h-8 rounded-full bg-violet-600 flex items-center justify-center text-sm font-bold">
-                  {session.user.name?.[0]?.toUpperCase()}
-                </div>
-                <span className="text-sm text-white/60 hidden sm:block">{session.user.name}</span>
-              </>
-            )}
-
+          <div className="flex items-center gap-2">
             {creator && creator.totalChunks > 0 && (
               <Button size="sm" onClick={() => router.push(`/twin/${creator.handle}`)}>
                 Talk to twin <ArrowRight className="w-4 h-4" />
               </Button>
             )}
-
             <Link href="/dashboard">
-              <Button size="sm" variant="outline">Dashboard</Button>
+              <Button size="sm" variant="outline">Browse twins</Button>
             </Link>
-
-            <button
-              onClick={() => signOut({ callbackUrl: "/" })}
-              className="flex items-center gap-1.5 text-xs text-white/40 hover:text-white/70 transition-colors"
-            >
-              <LogOut className="w-3.5 h-3.5" /> Sign out
-            </button>
           </div>
         </div>
 
@@ -189,8 +154,8 @@ function ConnectInner() {
                 <span className="text-violet-400 mr-2">2.</span> Connect your socials
               </h2>
               <p className="text-sm text-white/40 mb-4">
-                Enter your handle for each platform — we'll scrape your public profile with Firecrawl
-                and upload it to your Tropicalia project.
+                Enter your handle for each platform — we'll scrape your public profile and upload it
+                to your Tropicalia project.
               </p>
               <SocialConnect
                 handle={creator.handle}

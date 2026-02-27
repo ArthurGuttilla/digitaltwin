@@ -1,19 +1,10 @@
 import Link from "next/link";
 import { Bot, Twitter, Youtube, Instagram, Zap, Database, MessageSquare, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { auth } from "@/auth";
 
-export default async function Home() {
-  const session = await auth();
-  const isLoggedIn = !!session?.user;
-
-  // Where CTAs point depends on auth state
-  const primaryHref = isLoggedIn ? "/dashboard" : "/signup";
-  const createHref  = isLoggedIn ? "/connect"   : "/signup";
-
+export default function Home() {
   return (
     <div className="min-h-screen bg-[#0a0a0f] text-white">
-      {/* Gradient blobs */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         <div className="absolute -top-40 -left-40 w-96 h-96 bg-violet-600/20 rounded-full blur-3xl" />
         <div className="absolute top-1/2 -right-40 w-96 h-96 bg-pink-600/10 rounded-full blur-3xl" />
@@ -27,26 +18,14 @@ export default async function Home() {
             <Bot className="w-6 h-6 text-violet-400" />
             <span>DigitalTwin</span>
           </div>
-
-          {isLoggedIn ? (
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-full bg-violet-600 flex items-center justify-center text-sm font-bold">
-                {session.user.name?.[0]?.toUpperCase()}
-              </div>
-              <Link href="/dashboard">
-                <Button size="sm">Dashboard <ArrowRight className="w-3.5 h-3.5" /></Button>
-              </Link>
-            </div>
-          ) : (
-            <div className="flex items-center gap-2">
-              <Link href="/login">
-                <Button size="sm" variant="outline">Sign in</Button>
-              </Link>
-              <Link href="/signup">
-                <Button size="sm">Get started <ArrowRight className="w-3.5 h-3.5" /></Button>
-              </Link>
-            </div>
-          )}
+          <div className="flex items-center gap-2">
+            <Link href="/dashboard">
+              <Button size="sm" variant="outline">Browse twins</Button>
+            </Link>
+            <Link href="/connect">
+              <Button size="sm">Create twin <ArrowRight className="w-3.5 h-3.5" /></Button>
+            </Link>
+          </div>
         </nav>
 
         {/* Hero */}
@@ -66,15 +45,13 @@ export default async function Home() {
           </p>
 
           <div className="flex flex-wrap gap-3 justify-center">
-            <Link href={createHref}>
+            <Link href="/connect">
               <Button size="lg">
                 Create your twin <ArrowRight className="w-4 h-4" />
               </Button>
             </Link>
-            <Link href={isLoggedIn ? "/dashboard" : "/login"}>
-              <Button size="lg" variant="outline">
-                {isLoggedIn ? "View my twins" : "Sign in"}
-              </Button>
+            <Link href="/dashboard">
+              <Button size="lg" variant="outline">Browse twins</Button>
             </Link>
           </div>
         </section>
@@ -119,24 +96,19 @@ export default async function Home() {
               <p className="text-sm text-white/40">Ingest from anywhere you create</p>
             </div>
             <div className="flex gap-6">
-              <div className="flex flex-col items-center gap-1.5 text-sky-400">
-                <Twitter className="w-7 h-7" />
-                <span className="text-xs text-white/40">Twitter</span>
-              </div>
-              <div className="flex flex-col items-center gap-1.5 text-red-400">
-                <Youtube className="w-7 h-7" />
-                <span className="text-xs text-white/40">YouTube</span>
-              </div>
-              <div className="flex flex-col items-center gap-1.5 text-pink-400">
-                <Instagram className="w-7 h-7" />
-                <span className="text-xs text-white/40">Instagram</span>
-              </div>
-              <div className="flex flex-col items-center gap-1.5 text-violet-400">
-                <Bot className="w-7 h-7" />
-                <span className="text-xs text-white/40">Manual</span>
-              </div>
+              {[
+                { icon: <Twitter className="w-7 h-7" />, label: "Twitter", color: "text-sky-400" },
+                { icon: <Youtube className="w-7 h-7" />, label: "YouTube", color: "text-red-400" },
+                { icon: <Instagram className="w-7 h-7" />, label: "Instagram", color: "text-pink-400" },
+                { icon: <Bot className="w-7 h-7" />, label: "Manual", color: "text-violet-400" },
+              ].map((p) => (
+                <div key={p.label} className={`flex flex-col items-center gap-1.5 ${p.color}`}>
+                  {p.icon}
+                  <span className="text-xs text-white/40">{p.label}</span>
+                </div>
+              ))}
             </div>
-            <Link href={createHref}>
+            <Link href="/connect">
               <Button>Start now <ArrowRight className="w-4 h-4" /></Button>
             </Link>
           </div>

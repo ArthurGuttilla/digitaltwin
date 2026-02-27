@@ -1,21 +1,19 @@
 /**
- * GET  /api/context/status?handle=<handle>  — public: return twin status for the chat page
- * POST /api/context/status                  — protected: initialize a twin for the logged-in user
+ * GET  /api/context/status?handle=<handle>  — return twin status
+ * POST /api/context/status                  — initialize a twin (public)
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/auth";
-import { getCreatorByHandle, getCreator, upsertCreator } from "@/lib/store";
+import { getCreator, upsertCreator } from "@/lib/store";
 import { createProject } from "@/lib/tropicalia";
 
-// Public — used by the /twin/[handle] chat page
 export async function GET(req: NextRequest) {
   const handle = req.nextUrl.searchParams.get("handle");
   if (!handle) {
     return NextResponse.json({ error: "handle is required" }, { status: 400 });
   }
 
-  const creator = await getCreatorByHandle(handle);
+  const creator = await getCreator(handle);
   if (!creator) {
     return NextResponse.json({
       handle: handle.toLowerCase(),
@@ -30,13 +28,7 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({ ...creator, ready: creator.totalChunks > 0 });
 }
 
-// Protected — creates a Tropicalia project for the signed-in creator
 export async function POST(req: NextRequest) {
-  const session = await auth();
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
   try {
     const body = await req.json();
     const { handle, displayName } = body as { handle: string; displayName?: string };
@@ -45,22 +37,20 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "handle is required" }, { status: 400 });
     }
 
-    const userId = session.user.id;
     const normalizedHandle = handle.toLowerCase().replace(/^@/, "");
 
-    let creator = await getCreator(userId, normalizedHandle);
-    if (creator?.boxId) {
-      return NextResponse.json({ ...creator, ready: creator.totalChunks > 0 });
+    const existing = await getCreator(normalizedHandle);
+    if (existing?.boxId) {
+      return NextResponse.json({ ...existing, ready: existing.totalChunks > 0 });
     }
 
     const projectId = await createProject(normalizedHandle);
 
-    creator = {
-      userId,
+    const creator = {
       handle: normalizedHandle,
       displayName: displayName ?? handle,
       boxId: projectId,
-      connectedPlatforms: [],
+      connectedPlatforms: [] as [],
       totalChunks: 0,
     };
     await upsertCreator(creator);

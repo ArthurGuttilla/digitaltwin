@@ -2,8 +2,7 @@
  * Lazy Postgres client (postgres.js).
  * Nothing runs at import time — the connection is only made on the first query.
  *
- * Requires DATABASE_URL env var.
- * Free databases: neon.tech · supabase.com · railway.app
+ * Requires DATABASE_URL env var (Neon, Supabase, Railway, etc.)
  */
 
 import postgres, { type Sql } from "postgres";
@@ -18,8 +17,7 @@ function getClient(): Sql {
     client = postgres(url, {
       ssl: url.includes("localhost") || url.includes("127.0.0.1") ? false : "require",
       // Neon's pooled URL uses PgBouncer in transaction mode, which doesn't
-      // support prepared statements. Setting prepare: false makes postgres.js
-      // send simple queries instead, compatible with all connection modes.
+      // support prepared statements.
       prepare: false,
       max: 3,
       idle_timeout: 20,
@@ -30,27 +28,27 @@ function getClient(): Sql {
 }
 
 async function runMigrations(sql: Sql) {
-  await sql`
-    CREATE TABLE IF NOT EXISTS users (
-      id         TEXT PRIMARY KEY,
-      name       TEXT NOT NULL,
-      email      TEXT UNIQUE NOT NULL,
-      password   TEXT NOT NULL,
-      created_at TIMESTAMPTZ DEFAULT NOW()
-    )
+  // If the old auth-based schema exists (creators has user_id column), drop and recreate.
+  const oldSchema = await sql`
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'creators' AND column_name = 'user_id'
+    LIMIT 1
   `;
+  if (oldSchema.length > 0) {
+    await sql`DROP TABLE IF EXISTS creators`;
+    await sql`DROP TABLE IF EXISTS users`;
+  }
+
   await sql`
     CREATE TABLE IF NOT EXISTS creators (
       id                  TEXT PRIMARY KEY,
-      user_id             TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-      handle              TEXT NOT NULL,
+      handle              TEXT UNIQUE NOT NULL,
       display_name        TEXT NOT NULL,
       box_id              TEXT,
       connected_platforms JSONB NOT NULL DEFAULT '[]',
       total_chunks        INTEGER NOT NULL DEFAULT 0,
       last_ingested       TIMESTAMPTZ,
-      created_at          TIMESTAMPTZ DEFAULT NOW(),
-      UNIQUE(user_id, handle)
+      created_at          TIMESTAMPTZ DEFAULT NOW()
     )
   `;
 }
